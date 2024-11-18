@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convertitore CSV</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-100 min-h-screen p-4">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const FileConverter = () => {
+            const [files, setFiles] = React.useState([]);
+            const [converting, setConverting] = React.useState(false);
+            const [results, setResults] = React.useState([]);
+
+            const convertDateFormat = (text) => {
+                const monthMapping = {
+                    'Jan': '01', 'Feb': '02', 'Mar': '03', 'Apr': '04',
+                    'May': '05', 'Jun': '06', 'Jul': '07', 'Aug': '08',
+                    'Sep': '09', 'Oct': '10', 'Nov': '11', 'Dec': '12'
+                };
+
+                const datePattern = /(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(\d{4})/;
+                
+                return text.replace(datePattern, (match, day, month, year) => {
+                    const paddedDay = day.padStart(2, '0');
+                    return `${paddedDay}/${monthMapping[month]}/${year}`;
+                });
+            };
+
+            const isDate = (text) => {
+                const datePattern = /^\d{1,2}\s+(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{4}$/;
+                return datePattern.test(text.trim());
+            };
+
+            const formatNumber = (numberStr) => {
+                try {
+                    const cleanNumber = numberStr.replace(',', '.');
+                    const number = parseFloat(cleanNumber);
+                    const [intPart, decimalPart] = cleanNumber.split('.');
+                    
+                    const formattedInt = parseInt(intPart).toLocaleString('it-IT').replace(/\./g, '.');
+                    
+                    return decimalPart ? `${formattedInt},${decimalPart}` : formattedInt;
+                } catch {
+                    return numberStr;
+                }
+            };
+
+            const convertFile = async (file) => {
+                const text = await file.text();
+                const rows = text.split('\n');
+                
+                const convertedRows = rows.map(row => {
+                    if (!row.trim()) return row;
+                    
+                    const fields = row.split(',');
+                    const newFields = fields.map((field, index) => {
+                        const trimmedField = field.trim();
+                        
+                        if (index === 0 && isDate(trimmedField)) {
+                            return convertDateFormat(trimmedField);
+                        }
+                        
+                        return /[.,]/.test(trimmedField) ? formatNumber(trimmedField) : trimmedField;
+                    });
+                    
+                    return newFields.join(';');
+                });
+                
+                const convertedContent = convertedRows.join('\n');
+                const blob = new Blob([convertedContent], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                
+                return {
+                    name: file.name,
+                    url,
+                    status: 'success'
+                };
+            };
+
+            const handleFileSelect = (e) => {
+                const selectedFiles = Array.from(e.target.files);
+                if (selectedFiles.length > 3) {
+                    setResults([{ status: 'error', message: 'Puoi selezionare massimo 3 file' }]);
+                    return;
+                }
+                setFiles(selectedFiles);
+                setResults([]);
+            };
+
+            const handleDrop = (e) => {
+                e.preventDefault();
+                const droppedFiles = Array.from(e.dataTransfer.files).filter(file => file.name.endsWith('.csv'));
+                if (droppedFiles.length > 3) {
+                    setResults([{ status: 'error', message: 'Puoi selezionare massimo 3 file' }]);
+                    return;
+                }
+                setFiles(droppedFiles);
+                setResults([]);
+            };
+
+            const handleDragOver = (e) => {
+                e.preventDefault();
+            };
+
+            const handleConvert = async () => {
+                if (files.length === 0) {
+                    setResults([{ status: 'error', message: 'Seleziona almeno un file' }]);
+                    return;
+                }
+
+                setConverting(true);
+                setResults([]);
+
+                try {
+                    const conversions = await Promise.all(files.map(convertFile));
+                    setResults(conversions);
+                } catch (error) {
+                    setResults([{ status: 'error', message: 'Errore durante la conversione' }]);
+                }
+
+                setConverting(false);
+            };
+
+            return (
+                <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+                    <div className="text-center mb-8">
+                        <h1 className="text-3xl font-bold text-gray-800 mb-2">Convertitore CSV</h1>
+                        <p className="text-gray-600">Converti facilmente i tuoi file CSV</p>
+                    </div>
+
+                    <div 
+                        className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center mb-6"
+                        onDrop={handleDrop}
+                        onDragOver={handleDragOver}
+                    >
+                        <input
+                            type="file"
+                            accept=".csv"
+                            multiple
+                            onChange={handleFileSelect}
+                            className="hidden"
+                            id="file-input"
+                        />
+                        <label 
+                            htmlFor="file-input"
+                            className="cursor-pointer"
+                        >
+                            <div className="text-6xl mb-4">📁</div>
+                            <p className="text-gray-600 mb-2">
+                                Trascina qui i tuoi file CSV o clicca per selezionarli
+                            </p>
+                            <p className="text-sm text-gray-500">
+                                Massimo 3 file
+                            </p>
+                        </label>
+                    </div>
+
+                    {files.length > 0 && (
+                        <div className="mb-6">
+                            <h3 className="font-medium mb-2">File selezionati:</h3>
+                            {files.map(file => (
+                                <div key={file.name} className="text-sm text-gray-600 mb-1">
+                                    {file.name}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={handleConvert}
+                        disabled={converting || files.length === 0}
+                        className={`w-full py-3 px-4 rounded-lg text-white font-medium mb-6 ${
+                            converting || files.length === 0 
+                            ? 'bg-gray-400 cursor-not-allowed' 
+                            : 'bg-blue-600 hover:bg-blue-700'
+                        }`}
+                    >
+                        {converting ? 'Conversione in corso...' : 'Converti'}
+                    </button>
+
+                    {results.map((result, index) => (
+                        <div key={index} className={`p-4 rounded-lg mb-3 ${
+                            result.status === 'error' 
+                            ? 'bg-red-100 text-red-800' 
+                            : 'bg-green-100 text-green-800'
+                        }`}>
+                            {result.status === 'error' ? (
+                                <div className="flex items-center">
+                                    <span className="mr-2">❌</span>
+                                    <span>{result.message}</span>
+                                </div>
+                            ) : (
+                                <div className="flex justify-between items-center">
+                                    <div className="flex items-center">
+                                        <span className="mr-2">✅</span>
+                                        <span>{result.name}</span>
+                                    </div>
+                                    <a
+                                        href={result.url}
+                                        download={result.name.replace('.csv', '_convertito.csv')}
+                                        className="text-blue-600 hover:underline"
+                                    >
+                                        Scarica
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            );
+        };
+
+        ReactDOM.render(<FileConverter />, document.getElementById('root'));
+    </script>
+</body>
+</html>
