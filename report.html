@@ -38,12 +38,32 @@
                 return datePattern.test(text.trim());
             };
 
+            const isEmail = (text) => {
+                const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                return emailPattern.test(text.trim());
+            };
+
             const formatNumber = (numberStr) => {
+                // Se è un'email, ritorna il testo originale senza modifiche
+                if (isEmail(numberStr)) {
+                    return numberStr;
+                }
+
                 try {
+                    // Verifica se il numero contiene solo cifre, punti e virgole
+                    if (!/^[\d.,]+$/.test(numberStr)) {
+                        return numberStr;
+                    }
+
                     const cleanNumber = numberStr.replace(',', '.');
                     const number = parseFloat(cleanNumber);
-                    const [intPart, decimalPart] = cleanNumber.split('.');
                     
+                    // Se non è un numero valido, ritorna il testo originale
+                    if (isNaN(number)) {
+                        return numberStr;
+                    }
+
+                    const [intPart, decimalPart] = cleanNumber.split('.');
                     const formattedInt = parseInt(intPart).toLocaleString('it-IT').replace(/\./g, '.');
                     
                     return decimalPart ? `${formattedInt},${decimalPart}` : formattedInt;
@@ -65,6 +85,11 @@
                         
                         if (index === 0 && isDate(trimmedField)) {
                             return convertDateFormat(trimmedField);
+                        }
+                        
+                        // Se è un'email, non applicare la formattazione numerica
+                        if (isEmail(trimmedField)) {
+                            return trimmedField;
                         }
                         
                         return /[.,]/.test(trimmedField) ? formatNumber(trimmedField) : trimmedField;
